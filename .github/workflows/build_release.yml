@@ -19,7 +19,7 @@ jobs:
           sudo luarocks install luafilesystem
 
       - name: Build Mint.min.lua
-        run: lua tools/build_mint.lua
+        run: lua5.3 tools/build_mint.lua
 
       - name: Publish release asset
         uses: softprops/action-gh-release@v2
