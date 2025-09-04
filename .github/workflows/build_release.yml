@@ -1,0 +1,30 @@
+name: Build and Release Mint bundle
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Lua and LuaRocks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.3 luarocks
+          sudo luarocks install luafilesystem
+
+      - name: Build Mint.min.lua
+        run: lua tools/build_mint.lua
+
+      - name: Publish release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Mint.min.lua
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
