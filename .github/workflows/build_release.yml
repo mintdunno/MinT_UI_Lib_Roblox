@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,9 +17,10 @@ jobs:
 
       - name: Install Lua and LuaRocks
         run: |
+          set -e
           sudo apt-get update
-          sudo apt-get install -y lua5.3 luarocks
-          sudo luarocks install luafilesystem
+          sudo apt-get install -y lua5.3 liblua5.3-dev luarocks pkg-config
+          sudo luarocks --lua-version=5.3 install luafilesystem
 
       - name: Build Mint.min.lua
         run: lua5.3 tools/build_mint.lua
