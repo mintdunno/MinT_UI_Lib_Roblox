@@ -233,3 +233,441 @@ Notes
 - The bundle assumes Lua 5.1 semantics (loadstring, setfenv), available in Roblox environments.
 - If you modify the src files, re-run the builder to regenerate Mint.min.lua.
 
+
+
+
+---
+
+# Complete API Reference
+
+This section lists every public Core Module and UI Component. For each item:
+- Purpose: one-line summary
+- Props: constructor properties to .new(props) with name, type, optional, description
+- Methods: public instance methods (or module functions)
+- Events: public events and their arguments
+- Code Example: common usage
+
+## Core Modules
+
+### Animator
+- Purpose: Centralized, smooth tweening and micro-interactions (hover/press).
+- Methods:
+  - tween(instance, duration[, properties][, easingStyle][, easingDirection]) → Tween: Play a tween.
+  - bindHover(buttonLikeInst[, lightenColor3]) → cleanupFn: Animate background on hover.
+  - pressScale(buttonLikeInst) → cleanupFn: Subtle press feedback.
+- Events: None.
+- Code Example:
+```
+local t = Mint.Animator.tween(frame, 0.2, { BackgroundTransparency = 0.1 })
+```
+
+### ComponentBase
+- Purpose: Internal base for lifecycle; used by all components.
+- Methods (instance):
+  - Destroy(): Disconnects signals, runs cleanups, destroys owned instances.
+- Events: None.
+- Code Example: used implicitly by components; call comp:Destroy().
+
+### ErrorHandler
+- Purpose: Centralized user feedback and logging bridge.
+- Methods:
+  - notify(level, message)
+  - info(msg), success(msg), warn(msg), error(msg)
+- Events:
+  - event:Connect(function(level, message) ... end)
+- Code Example:
+```
+Mint.ErrorHandler.success("Done!")
+Mint.ErrorHandler.event:Connect(function(level, msg) print(level, msg) end)
+```
+
+### Event
+- Purpose: Lightweight signal wrapper.
+- Methods:
+  - Event.new() → event
+  - :Connect(fn) → RBXScriptConnection
+  - :Once(fn) → RBXScriptConnection
+  - :Fire(...)
+  - :Destroy()
+- Events: n/a (it is the event).
+- Code Example:
+```
+local ev = Mint.Event.new(); ev:Connect(function(a) print(a) end); ev:Fire(123)
+```
+
+### Hotkeys
+- Purpose: Register global keyboard shortcuts mapped to callbacks or Registry actions.
+- Methods:
+  - bind("Ctrl+R", function|{Action=string})
+  - unbind(combo)
+  - clear()
+  - enabled(boolean)
+- Notes: Ignores shortcuts when a TextBox is focused.
+- Events: None.
+- Code Example:
+```
+Mint.Hotkeys.bind("Ctrl+R", { Action = "RunScript" })
+```
+
+### LogManager
+- Purpose: Central log store with levels, filtering, and events.
+- Methods:
+  - append(level, message) → entry
+  - clear()
+  - list({ level?, search? }) → { entries }
+- Events:
+  - added:Connect(function(entry) ... end)
+  - cleared:Connect(function() ... end)
+- Code Example:
+```
+Mint.LogManager.append("info", "Hello")
+```
+
+### Queue
+- Purpose: Manage a queue of tasks/scripts with statuses and progress.
+- Methods (instance):
+  - new() → queue
+  - enqueue({ name?, payload? }) → id, item
+  - get(id) → item
+  - list() → { items }
+  - update(id, patch)
+  - start(id), pause(id), stop(id), complete(id, ok, result), remove(id), clear()
+- Events:
+  - changed:Connect(function(op, item) ... end)
+- Code Example:
+```
+local q = Mint.Queue.new(); local id = q:enqueue({ name = "Task" }); q:start(id)
+```
+
+### Registry
+- Purpose: Map string action names to functions for UI wiring.
+- Methods:
+  - register(name, fn[, meta])
+  - unregister(name)
+  - has(name) → bool
+  - list() → { { name, meta } }
+  - invoke(name, ...) → ok, resultOrErr
+- Events:
+  - changed:Connect(function(op, name) ... end)
+- Code Example:
+```
+Mint.Registry.register("Run", function() print("Go") end)
+Mint.Registry.invoke("Run")
+```
+
+### Responsive
+- Purpose: UIScale that adapts to viewport size with clamped scaling.
+- Methods:
+  - Attach(screenGui[, opts]) → UIScale, cleanupFn
+- Events: None.
+- Code Example:
+```
+local scale = Mint.Responsive.Attach(screenGui)
+```
+
+### Storage
+- Purpose: Pluggable persistence for scripts/settings; supports autosave.
+- Methods:
+  - setBackend({ save=function(key,t), load=function(key) end })
+  - save(key, table)
+  - load(key) → table|nil
+  - enableAuto(key, getterFn[, intervalSeconds])
+- Events: None.
+- Code Example:
+```
+Mint.Storage.save("active", { text = "hi" })
+```
+
+### ThemeManager
+- Purpose: Manage themes (Dark/Light/custom) and notify listeners.
+- Methods:
+  - current() → theme
+  - set(name) → bool
+  - toggle()
+  - register(name, themeTable)
+- Events:
+  - changed:Connect(function(theme) ... end)
+- Code Example:
+```
+Mint.ThemeManager.set("Light")
+```
+
+### Util
+- Purpose: Helpers for Instances, layout, padding, rounding, tween wrapper.
+- Methods:
+  - Create(className, props?, children?) → Instance
+  - Tween(inst, tweenInfo, goal) → Tween?
+  - Roundify(inst[, radius][, strokeColor][, strokeTransparency])
+  - Padding(frame[, px]) → UIPadding
+  - VList(parent, spacing[, align]) / HList(parent, spacing[, align]) → UIListLayout
+- Events: None.
+- Code Example:
+```
+local frame = Mint.Util.Create("Frame", { Size = UDim2.fromOffset(200,100) })
+```
+
+### Validator
+- Purpose: Lightweight syntax checks (bracket balance, unterminated strings).
+- Methods:
+  - basicSyntax(text) → true | false, { line, col, msg }
+- Events: None.
+- Code Example:
+```
+local ok, err = Mint.Validator.basicSyntax(code)
+```
+
+---
+
+## UI Components (Alphabetical)
+All components: comp = Mint.components.Name.new(props); comp.Instance is the Instance; comp:Destroy() cleans up.
+
+### Button
+- Purpose: Clickable button with styles and micro-interactions.
+- Props:
+  - Text (string, optional): Label text.
+  - Icon (string, optional): Image asset id.
+  - Action (string, optional): Registry action name to invoke on click.
+  - OnClick (function, optional): Callback on click.
+  - Style (string, optional): "Primary"|"Secondary"|"Ghost" (default Primary).
+  - Size (UDim2, optional): Default (160x36).
+  - Parent (Instance, optional): Auto-parent target.
+- Methods:
+  - Destroy(): Cleanup and destroy instances.
+- Events: None.
+- Code Example:
+```
+local btn = Mint.components.Button.new({ Text = "Run", Action = "RunScript", Parent = app.Root })
+```
+
+### CodeEditor
+- Purpose: Multi-line code editor with simple Lua highlighting, line numbers, autosave.
+- Props:
+  - Text (string, optional): Initial text.
+  - AutoSaveKey (string, optional): Storage key for autosave.
+  - OnChanged (function(string), optional): Called on text change.
+  - OnValidate (function(string)→ok,errInfo, optional): Validate function (default Validator.basicSyntax).
+  - Size (UDim2, optional)
+  - Parent (Instance, optional)
+- Methods:
+  - SetText(text)
+  - Destroy()
+- Events: None.
+- Code Example:
+```
+local editor = Mint.components.CodeEditor.new({ Text = "print('Hi')", AutoSaveKey = "mint_edit" })
+```
+
+### Console
+- Purpose: Scrollable console for logs; filters by level; search; Clear.
+- Props:
+  - Size (UDim2, optional)
+  - Levels (table set, optional): { info=true, success=true, warning=true, error=true, debug=true, output=true }
+  - MaxEntries (number, optional): Cap on rendered rows (default 500)
+  - Parent (Instance, optional)
+- Methods:
+  - Destroy()
+- Events: Reflects LogManager events (internally subscribed).
+- Code Example:
+```
+local console = Mint.components.Console.new({ MaxEntries = 1000 })
+```
+
+### Dropdown
+- Purpose: Select from a list with a popover menu and overlay.
+- Props:
+  - Items (array, required): strings or { text=string, value=any }.
+  - Placeholder (string, optional)
+  - SelectedValue (any, optional)
+  - OnChanged (function(value, item), optional)
+  - Action (string, optional)
+  - Size (UDim2, optional)
+  - MaxMenuHeight (number, optional)
+  - Parent (Instance, optional)
+- Methods:
+  - SetItems(items)
+  - SetSelected(value[, fire])
+  - Destroy()
+- Events: None.
+- Code Example:
+```
+local dd = Mint.components.Dropdown.new({ Items = {"Low","High"}, Placeholder = "Quality" })
+```
+
+### ExecutionControls
+- Purpose: Play/Pause/Stop strip with visual state and hooks.
+- Props:
+  - State (string, optional): "stopped"|"running"|"paused" (default "stopped")
+  - OnPlay (function, optional)
+  - OnPause (function, optional)
+  - OnStop (function, optional)
+  - Actions (table, optional): { Play=string, Pause=string, Stop=string }
+  - Parent (Instance, optional)
+- Methods:
+  - Destroy()
+- Events: None.
+- Code Example:
+```
+local ec = Mint.components.ExecutionControls.new({ Actions = { Play = "RunScript" } })
+```
+
+### FileBrowser
+- Purpose: Tree/list script manager with expand/collapse and open/select.
+- Props:
+  - Items (array, required): nodes { id, name, isFolder, children? }
+  - OnSelect (function(node), optional)
+  - OnOpen (function(node), optional)
+  - OnAction (function(actionName, node), optional)
+  - Size (UDim2, optional)
+  - Parent (Instance, optional)
+- Methods:
+  - Destroy()
+- Events: None.
+- Code Example:
+```
+local fb = Mint.components.FileBrowser.new({ Items = { { id="Scripts", name="Scripts", isFolder=true, _expanded=true } } })
+```
+
+### Label
+- Purpose: Theme-aware text display.
+- Props: Text (string), Size (UDim2, opt), TextSize (number, opt), Bold (boolean, opt), Parent (Instance, opt).
+- Methods: Destroy()
+- Events: None.
+- Code Example:
+```
+local lbl = Mint.components.Label.new({ Text = "Status" })
+```
+
+### Modal
+- Purpose: Overlay dialog with content and buttons.
+- Props:
+  - Title (string, optional)
+  - Content (Instance|string, optional)
+  - Buttons (array, optional): { text, style?, action? }
+  - Size (UDim2, optional)
+  - Parent (Instance, optional)
+- Methods:
+  - Open()
+  - Close()
+  - SetContent(value)
+  - Destroy()
+- Events: None.
+- Code Example:
+```
+local modal = Mint.components.Modal.new({ Title = "Confirm" })
+modal:Open()
+```
+
+### Panel
+- Purpose: Themed container with optional layout helpers.
+- Props: Size (UDim2), Padding (number, opt), Layout ("Vertical"|"Horizontal", opt), Parent (Instance, opt)
+- Methods: Destroy()
+- Events: None.
+- Code Example:
+```
+local panel = Mint.components.Panel.new({ Size = UDim2.fromOffset(320,200), Layout = "Vertical" })
+```
+
+### PerformanceMonitor
+- Purpose: Show memory usage and a run timer (Start/Pause/Stop).
+- Props: Size (UDim2, opt), Parent (Instance, opt)
+- Methods: Start(), Pause(), Stop(), Destroy()
+- Events: None.
+- Code Example:
+```
+local pm = Mint.components.PerformanceMonitor.new({})
+pm.Start()
+```
+
+### ProgressBar
+- Purpose: Visual progress indicator.
+- Props: Value (number 0..1, opt), Label (string, opt), Size (UDim2, opt), Parent (Instance, opt)
+- Methods: SetValue(number), Destroy()
+- Events: None.
+- Code Example:
+```
+local pb = Mint.components.ProgressBar.new({ Value = 0.4 })
+```
+
+### QueueManager
+- Purpose: Visual manager for a Queue instance with inline controls.
+- Props: Queue (Queue instance, required), Actions (table, opt), OnSelect (function, opt), Size (UDim2, opt), Parent (Instance, opt)
+- Methods: Destroy()
+- Events: Reflects Queue.changed (internally subscribed).
+- Code Example:
+```
+local qm = Mint.components.QueueManager.new({ Queue = Mint.Queue.new() })
+```
+
+### StatusBar
+- Purpose: Bottom status line with sandbox/connection indicator.
+- Props: Text (string, opt), Sandbox (string, opt), Size (UDim2, opt), Parent (Instance, opt)
+- Methods: SetText(text), SetSandbox(state), Destroy()
+- Events: None.
+- Code Example:
+```
+local sb = Mint.components.StatusBar.new({ Text = "Ready", Sandbox = "Sandboxed" })
+```
+
+### Tabs
+- Purpose: Tabbed interface hosting content views.
+- Props: Tabs (array, opt: { id, title, content }), OnChanged (function(id), opt), Size (UDim2, opt), Parent (Instance, opt)
+- Methods: AddTab({ id, title, content }), Destroy()
+- Events: None.
+- Code Example:
+```
+local tabs = Mint.components.Tabs.new({}); tabs:AddTab({ id="one", title="One", content = Instance.new("Frame") })
+```
+
+### TextInput
+- Purpose: Single-line text input with optional validation and submit.
+- Props: Placeholder (string, opt), Text (string, opt), ClearTextOnFocus (bool, opt), OnChanged (fn), OnSubmitted (fn), Validate (fn), Action (string), Size (UDim2), Parent (Instance)
+- Methods: SetText(text), Destroy()
+- Events: None.
+- Code Example:
+```
+local ti = Mint.components.TextInput.new({ Placeholder = "Type...", OnSubmitted = function(t) print(t) end })
+```
+
+### Toggle
+- Purpose: Boolean toggle (switch) with animated knob.
+- Props: Label (string), Value (bool, opt), OnChanged (function(bool), opt), Action (string, opt), Parent (Instance, opt)
+- Methods: SetValue(bool), GetValue() → bool, Destroy()
+- Events: None.
+- Code Example:
+```
+local tg = Mint.components.Toggle.new({ Label = "Enable", Value = true })
+```
+
+### Toolbar
+- Purpose: Horizontal button group for common actions.
+- Props: Items (array: { id, text, icon?, style?, Action?, OnClick? }), Spacing (number, opt), Parent (Instance, opt)
+- Methods: Destroy()
+- Events: None.
+- Code Example:
+```
+local tb = Mint.components.Toolbar.new({ Items = { { id="run", text="Run", Action="Run" } } })
+```
+
+### VariableInspector
+- Purpose: Inspect and edit variables live (booleans, numbers, strings, nested tables).
+- Props: Data (table) or Provider (function→table), OnChanged (function(path, value), opt), RefreshInterval (number, opt), Size (UDim2, opt), Parent (Instance, opt)
+- Methods: SetData(table), Destroy()
+- Events: None.
+- Code Example:
+```
+local vi = Mint.components.VariableInspector.new({ Data = { speed = 1, verbose = true } })
+```
+
+### Notification (Manager)
+- Purpose: Toast notifications for info/success/warning/error.
+- Props: (Attach) opts table: { Duration?, MaxToasts?, Position? }
+- Methods:
+  - Notification.Attach(screenGui[, opts])
+  - Notification.Detach()
+  - Notification.Notify(level, message[, opts])
+- Events: Bridges ErrorHandler automatically when attached.
+- Code Example:
+```
+Mint.components.Notification.Attach(app.Root, { Position = "TopRight" })
+Mint.ErrorHandler.success("Ready")
+```
